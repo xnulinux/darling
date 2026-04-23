@@ -61,7 +61,6 @@ jobs:
           # Either gated behind COMPONENT_gui/jsc/webkit/python/ruby/perl/iokitd,
           # or removed via -DBUILD_SWIFT=OFF / -DBUILD_LEGACY_LIBRESSL=OFF.
           SKIP=(
-            src/external/cocotron
             src/external/cups
             src/external/dbuskit
             src/external/WTF
