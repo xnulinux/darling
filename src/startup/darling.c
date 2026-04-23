@@ -1063,8 +1063,12 @@ void setupPrefix()
 		exit(1);
 	}
 
+	// Default root password is "root" (SHA-512 with salt "xnulinux").
+	// xnulinux ships this prefix on tmpfs, so we bake a default in setupPrefix
+	// rather than make the user `passwd root` every boot. /etc/passwd keeps "*"
+	// per Darwin convention; getpwnam queries master.passwd for the real hash.
 	fputs(
-		"root:*:0:0::0:0:System Administrator:/var/root:/bin/sh\n"
+		"root:$6$xnulinux$i.0jnJxZJjPG7/Xl2XLIMIjAtmvlJNjGGnWiV09HWV08OX9jZVtxP1NURRE348DdJP8/kiGl2lX7GOnsP92eK.:0:0::0:0:System Administrator:/var/root:/bin/sh\n"
 		"_sshd:*:75:75::0:0:sshd Privilege separation:/var/empty:/usr/bin/false\n",
 		file);
 	if (passwd_entry->pw_uid != 0) {
