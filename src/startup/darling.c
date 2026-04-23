@@ -1037,15 +1037,22 @@ void setupPrefix()
 		exit(1);
 	}
 
-	fprintf(file,
+	fputs(
 		"root:*:0:0:System Administrator:/var/root:/bin/sh\n"
-		"_sshd:*:75:75:sshd Privilege separation:/var/empty:/usr/bin/false\n"
-		"%s:*:%d:%d:Darling User:/Users/%s:/bin/bash\n",
-		passwd_entry->pw_name,
-		passwd_entry->pw_uid,
-		passwd_entry->pw_gid,
-		passwd_entry->pw_name
-	);
+		"_sshd:*:75:75:sshd Privilege separation:/var/empty:/usr/bin/false\n",
+		file);
+	// Skip the per-caller "Darling User" entry when the caller is root,
+	// otherwise we'd write a second `root:` line with /Users/root + bash
+	// and getpwnam("root") becomes ambiguous (which broke sshd auth).
+	if (passwd_entry->pw_uid != 0) {
+		fprintf(file,
+			"%s:*:%d:%d:Darling User:/Users/%s:/bin/bash\n",
+			passwd_entry->pw_name,
+			passwd_entry->pw_uid,
+			passwd_entry->pw_gid,
+			passwd_entry->pw_name
+		);
+	}
 	fclose(file);
 
 	path[plen] = '\0';
@@ -1056,15 +1063,19 @@ void setupPrefix()
 		exit(1);
 	}
 
-	fprintf(file,
+	fputs(
 		"root:*:0:0::0:0:System Administrator:/var/root:/bin/sh\n"
-		"_sshd:*:75:75::0:0:sshd Privilege separation:/var/empty:/usr/bin/false\n"
-		"%s:*:%d:%d::0:0:Darling User:/Users/%s:/bin/bash\n",
-		passwd_entry->pw_name,
-		passwd_entry->pw_uid,
-		passwd_entry->pw_gid,
-		passwd_entry->pw_name
-	);
+		"_sshd:*:75:75::0:0:sshd Privilege separation:/var/empty:/usr/bin/false\n",
+		file);
+	if (passwd_entry->pw_uid != 0) {
+		fprintf(file,
+			"%s:*:%d:%d::0:0:Darling User:/Users/%s:/bin/bash\n",
+			passwd_entry->pw_name,
+			passwd_entry->pw_uid,
+			passwd_entry->pw_gid,
+			passwd_entry->pw_name
+		);
+	}
 	fclose(file);
 
 	path[plen] = '\0';
@@ -1075,15 +1086,22 @@ void setupPrefix()
 		exit(1);
 	}
 
-	fprintf(file,
-		"wheel:*:0:root,%s\n"
-		"_sshd:*:75:\n"
-		"%s:*:%d:%s\n",
-		passwd_entry->pw_name,
-		passwd_entry->pw_name,
-		passwd_entry->pw_gid,
-		passwd_entry->pw_name
-	);
+	if (passwd_entry->pw_uid == 0) {
+		fputs(
+			"wheel:*:0:root\n"
+			"_sshd:*:75:\n",
+			file);
+	} else {
+		fprintf(file,
+			"wheel:*:0:root,%s\n"
+			"_sshd:*:75:\n"
+			"%s:*:%d:%s\n",
+			passwd_entry->pw_name,
+			passwd_entry->pw_name,
+			passwd_entry->pw_gid,
+			passwd_entry->pw_name
+		);
+	}
 	fclose(file);
 	
 	seteuid(0);
