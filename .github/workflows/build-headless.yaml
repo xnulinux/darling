@@ -77,7 +77,6 @@ jobs:
             src/external/openjdk
             src/external/glut
             src/external/OpenAL
-            src/external/mDNSResponder
             src/external/TextEdit
             src/external/swift
             src/external/IOStorageFamily
