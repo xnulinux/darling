@@ -78,8 +78,6 @@ jobs:
             src/external/OpenAL
             src/external/TextEdit
             src/external/swift
-            src/external/IOStorageFamily
-            src/external/IONetworkingFamily
             src/external/iokitd
             src/external/libffi
             src/external/libressl-2.2.9
