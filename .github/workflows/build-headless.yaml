@@ -112,6 +112,14 @@ jobs:
           grep -q 'int (\*NSApplicationMain_ptr)(int, const char\*\*)' "$F" \
             || { echo "::error::libxpc signature patch did not apply"; exit 1; }
 
+          # secd lists CoreData as a link dep but doesn't reference any
+          # CoreData APIs. CoreData lives in cocotron (gui) or in dev-stubs
+          # (cli_dev) — neither built in headless cli. Drop the dead link.
+          F=src/external/security/keychain/securityd/CMakeLists.txt
+          grep -qE '^[[:space:]]+CoreData$' "$F" \
+            || { echo "::error::secd CoreData line missing — submodule changed?"; exit 1; }
+          sed -i '/^[[:space:]]\+CoreData$/d' "$F"
+
       - name: Setup ccache
         uses: hendrikmuhs/ccache-action@v1.2
         with:
