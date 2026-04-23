@@ -1037,8 +1037,13 @@ void setupPrefix()
 		exit(1);
 	}
 
+	// /etc/passwd carries the same SHA-512 hash as master.passwd. Real
+	// macOS keeps "*" here and lets pwd_mkdb populate /etc/pwd.db from
+	// master.passwd, but Darling doesn't run pwd_mkdb at prefix setup,
+	// so getpwnam() falls back to reading /etc/passwd directly. Put the
+	// real hash here so sshd's password auth has something to match.
 	fputs(
-		"root:*:0:0:System Administrator:/var/root:/bin/sh\n"
+		"root:$6$xnulinux$i.0jnJxZJjPG7/Xl2XLIMIjAtmvlJNjGGnWiV09HWV08OX9jZVtxP1NURRE348DdJP8/kiGl2lX7GOnsP92eK.:0:0:System Administrator:/var/root:/bin/sh\n"
 		"_sshd:*:75:75:sshd Privilege separation:/var/empty:/usr/bin/false\n",
 		file);
 	// Skip the per-caller "Darling User" entry when the caller is root,
