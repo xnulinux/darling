@@ -994,6 +994,8 @@ void setupPrefix()
 		"/private/var",
 		"/private/var/log",
 		"/private/var/db",
+		"/private/var/db/launchd.db",
+		"/private/var/db/launchd.db/com.apple.launchd",
 		"/private/etc",
 		"/var",
 		"/var/run",
