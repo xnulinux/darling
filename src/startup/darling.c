@@ -998,7 +998,8 @@ void setupPrefix()
 		"/var",
 		"/var/run",
 		"/var/tmp",
-		"/var/log"
+		"/var/log",
+		"/var/empty"
 	};
 
 	fprintf(stderr, "Setting up a new Darling prefix at %s\n", prefix);
@@ -1036,6 +1037,7 @@ void setupPrefix()
 
 	fprintf(file,
 		"root:*:0:0:System Administrator:/var/root:/bin/sh\n"
+		"_sshd:*:75:75:sshd Privilege separation:/var/empty:/usr/bin/false\n"
 		"%s:*:%d:%d:Darling User:/Users/%s:/bin/bash\n",
 		passwd_entry->pw_name,
 		passwd_entry->pw_uid,
@@ -1054,6 +1056,7 @@ void setupPrefix()
 
 	fprintf(file,
 		"root:*:0:0::0:0:System Administrator:/var/root:/bin/sh\n"
+		"_sshd:*:75:75::0:0:sshd Privilege separation:/var/empty:/usr/bin/false\n"
 		"%s:*:%d:%d::0:0:Darling User:/Users/%s:/bin/bash\n",
 		passwd_entry->pw_name,
 		passwd_entry->pw_uid,
@@ -1072,6 +1075,7 @@ void setupPrefix()
 
 	fprintf(file,
 		"wheel:*:0:root,%s\n"
+		"_sshd:*:75:\n"
 		"%s:*:%d:%s\n",
 		passwd_entry->pw_name,
 		passwd_entry->pw_name,
