@@ -97,19 +97,10 @@ jobs:
           git submodule update --init --depth=1 --recursive --jobs=8 -- "${KEEP[@]}"
           df -h
 
-      - name: Patch submodules for headless Release build
+      - name: Patch submodules for headless build
         shell: bash
         run: |
           set -euo pipefail
-          # objc4 hardcodes -DOBJC_IS_DEBUG_BUILD=1 unconditionally; in Release
-          # builds DEBUG is undefined, so objc-runtime.mm:127 #errors out on
-          # the macro mismatch. Set it to 0; CMAKE_C_FLAGS_DEBUG re-adds =1 for
-          # Debug builds (later -D wins in the preprocessor).
-          F=src/external/objc4/runtime/CMakeLists.txt
-          grep -q -- '-DOBJC_NO_GC -DOBJC_IS_DEBUG_BUILD=1' "$F" \
-            || { echo "::error::objc4 patch pattern missing — submodule changed?"; exit 1; }
-          sed -i 's|-DOBJC_NO_GC -DOBJC_IS_DEBUG_BUILD=1|-DOBJC_NO_GC -DOBJC_IS_DEBUG_BUILD=0|' "$F"
-
           # libxpc/src/runtime.m imports <AppKit/NSApplication.h> only to type
           # the dlsym() result. AppKit headers come from cocotron, which we
           # exclude for headless. Drop the import and inline the signature.
