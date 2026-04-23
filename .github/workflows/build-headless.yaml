@@ -43,6 +43,16 @@ jobs:
           restore-keys: |
             darling-submodules-v1-
 
+      - name: Rewrite submodule URLs to upstream
+        shell: bash
+        run: |
+          # .gitmodules uses relative URLs (../foo.git) which would resolve
+          # against this fork's origin. Only the parent repo is forked, not
+          # the ~130 submodule repos, so point them at upstream darlinghq.
+          # Submodule SHAs are pinned in this repo, so this is reproducible.
+          sed -i 's|url = \.\./|url = https://github.com/darlinghq/|g' .gitmodules
+          git submodule sync --recursive
+
       - name: Init only needed submodules
         shell: bash
         run: |
