@@ -131,8 +131,10 @@ jobs:
         run: |
           mkdir -p build
           cd build
+          # No CMAKE_BUILD_TYPE: Release made Clang emit chained-fixup
+          # relocations that cctools-port ld64 cannot read, breaking dyld
+          # linkage. Upstream's debian/rules builds with empty config too.
           cmake .. \
-            -DCMAKE_BUILD_TYPE=Release \
             -DCOMPONENTS=cli \
             -DTARGET_i386=OFF \
             -DBUILD_SWIFT=OFF \
