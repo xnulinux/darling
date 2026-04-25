@@ -1044,7 +1044,7 @@ void setupPrefix()
 	// real hash here so sshd's password auth has something to match.
 	fputs(
 		"root:$6$xnulinux$i.0jnJxZJjPG7/Xl2XLIMIjAtmvlJNjGGnWiV09HWV08OX9jZVtxP1NURRE348DdJP8/kiGl2lX7GOnsP92eK.:0:0:System Administrator:/var/root:/bin/sh\n"
-		"_sshd:*:75:75:sshd Privilege separation:/var/empty:/usr/bin/false\n",
+		"sshd:*:75:75:sshd Privilege separation:/var/empty:/usr/bin/false\n",
 		file);
 	// Skip the per-caller "Darling User" entry when the caller is root,
 	// otherwise we'd write a second `root:` line with /Users/root + bash
@@ -1074,7 +1074,7 @@ void setupPrefix()
 	// per Darwin convention; getpwnam queries master.passwd for the real hash.
 	fputs(
 		"root:$6$xnulinux$i.0jnJxZJjPG7/Xl2XLIMIjAtmvlJNjGGnWiV09HWV08OX9jZVtxP1NURRE348DdJP8/kiGl2lX7GOnsP92eK.:0:0::0:0:System Administrator:/var/root:/bin/sh\n"
-		"_sshd:*:75:75::0:0:sshd Privilege separation:/var/empty:/usr/bin/false\n",
+		"sshd:*:75:75::0:0:sshd Privilege separation:/var/empty:/usr/bin/false\n",
 		file);
 	if (passwd_entry->pw_uid != 0) {
 		fprintf(file,
@@ -1098,12 +1098,12 @@ void setupPrefix()
 	if (passwd_entry->pw_uid == 0) {
 		fputs(
 			"wheel:*:0:root\n"
-			"_sshd:*:75:\n",
+			"sshd:*:75:\n",
 			file);
 	} else {
 		fprintf(file,
 			"wheel:*:0:root,%s\n"
-			"_sshd:*:75:\n"
+			"sshd:*:75:\n"
 			"%s:*:%d:%s\n",
 			passwd_entry->pw_name,
 			passwd_entry->pw_name,
