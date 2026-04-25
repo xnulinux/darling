@@ -120,6 +120,13 @@ jobs:
             || { echo "::error::secd CoreData line missing — submodule changed?"; exit 1; }
           sed -i '/^[[:space:]]\+CoreData$/d' "$F"
 
+          # darling-xnu's libsystem_kernel emulation lacks PROC_PIDLISTFDS,
+          # which Apple's sshd needs (its closefrom() impl calls it). Without
+          # this, sshd dies during kex with "Unsupported pidinfo flavor: 1".
+          (cd src/external/xnu && git apply --check "$GITHUB_WORKSPACE/ci/patches/0001-darling-xnu-proc-pidlistfds.patch") \
+            || { echo "::error::darling-xnu PROC_PIDLISTFDS patch no longer applies"; exit 1; }
+          (cd src/external/xnu && git apply "$GITHUB_WORKSPACE/ci/patches/0001-darling-xnu-proc-pidlistfds.patch")
+
       - name: Setup ccache
         uses: hendrikmuhs/ccache-action@v1.2
         with:

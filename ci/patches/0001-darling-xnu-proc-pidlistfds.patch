@@ -1,0 +1,107 @@
+diff --git a/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/misc/proc_info.c b/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/misc/proc_info.c
+index c2f70fb..39a9fd9 100644
+--- a/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/misc/proc_info.c
++++ b/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/misc/proc_info.c
+@@ -112,6 +112,7 @@ static long _proc_pidinfo_regionpath(int32_t pid, uint64_t arg, void* buffer, in
+ static long _proc_pidinfo_taskinfo(int32_t pid, void* buffer, int32_t bufsize);
+ static long _proc_pidinfo_taskallinfo(int32_t pid, void* buffer, int32_t bufsize);
+ static long _proc_pidinfo_listthreads(int32_t pid, void* buffer, int32_t bufsize);
++static long _proc_pidinfo_listfds(int32_t pid, void* buffer, int32_t bufsize);
+ 
+ long _proc_pidinfo(int32_t pid, uint32_t flavor, uint64_t arg, void* buffer, int32_t bufsize)
+ {
+@@ -161,6 +162,10 @@ long _proc_pidinfo(int32_t pid, uint32_t flavor, uint64_t arg, void* buffer, int
+ 		{
+ 			return _proc_pidinfo_listthreads(pid, buffer, bufsize);
+ 		}
++		case PROC_PIDLISTFDS:
++		{
++			return _proc_pidinfo_listfds(pid, buffer, bufsize);
++		}
+ 		default:
+ 		{
+ 			__simple_printf("sys_proc_info(): Unsupported pidinfo flavor: %d\n",
+@@ -827,3 +832,83 @@ bail:
+ 	close_internal(fd);
+ 	return count * sizeof(uint64_t);
+ }
++
++static long _proc_pidinfo_listfds(int32_t pid, void* buffer, int32_t bufsize)
++{
++	char path[64], linkpath[80], target[128];
++	char dents[512];
++	int dirfd, ret;
++	long basep = 0;
++	int32_t totalCount = 0;
++	int32_t writtenCount = 0;
++
++	struct proc_fdinfo* out = (struct proc_fdinfo*) buffer;
++	int32_t maxCount = 0;
++	if (out != NULL && bufsize >= (int32_t) sizeof(struct proc_fdinfo))
++		maxCount = bufsize / sizeof(struct proc_fdinfo);
++
++	__simple_sprintf(path, "/proc/%d/fd", pid);
++
++	dirfd = sys_open_nocancel(path, BSD_O_RDONLY | BSD_O_DIRECTORY, 0);
++	if (dirfd < 0)
++		return -ESRCH;
++
++	while ((ret = sys_getdirentries(dirfd, (char*) dents, sizeof(dents), &basep)) > 0)
++	{
++		int pos = 0;
++
++		while (pos < ret)
++		{
++			struct bsd_dirent* dent = (struct bsd_dirent*) &dents[pos];
++
++			if (!isdigit(dent->d_name[0]))
++			{
++				pos += dent->d_reclen;
++				continue;
++			}
++
++			int fdnum = __simple_atoi(dent->d_name, NULL);
++
++			// Skip our own directory iterator fd; it isn't part of the
++			// caller's fd table from their perspective.
++			if (fdnum == dirfd)
++			{
++				pos += dent->d_reclen;
++				continue;
++			}
++
++			++totalCount;
++
++			if (writtenCount < maxCount)
++			{
++				__simple_sprintf(linkpath, "/proc/%d/fd/%d", pid, fdnum);
++				long linklen = sys_readlink(linkpath, target, sizeof(target) - 1);
++
++				uint32_t fdtype = PROX_FDTYPE_VNODE;
++				if (linklen > 0)
++				{
++					target[linklen] = 0;
++					if (strncmp(target, "socket:", 7) == 0)
++						fdtype = PROX_FDTYPE_SOCKET;
++					else if (strncmp(target, "pipe:", 5) == 0)
++						fdtype = PROX_FDTYPE_PIPE;
++				}
++
++				out[writtenCount].proc_fd = fdnum;
++				out[writtenCount].proc_fdtype = fdtype;
++				++writtenCount;
++			}
++
++			pos += dent->d_reclen;
++		}
++	}
++
++	close_internal(dirfd);
++
++	// XNU contract: when buffer is NULL or too small for an entry, return
++	// total bytes the caller would need. Otherwise return bytes written.
++	if (out == NULL || bufsize == 0)
++		return totalCount * sizeof(struct proc_fdinfo);
++
++	return writtenCount * sizeof(struct proc_fdinfo);
++}
