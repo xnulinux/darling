@@ -137,15 +137,14 @@ jobs:
             || { echo "::error::darling-xnu LOCAL_PEERCRED patch no longer applies"; exit 1; }
           (cd src/external/xnu && git apply "$GITHUB_WORKSPACE/ci/patches/0002-darling-xnu-sockopt-local-peercred-collision.patch")
 
-          # Darling's sys_chroot called Linux chroot directly with the
-          # raw prefix-relative path (no vchroot_expand), so Apple's
-          # sshd privsep chroot("/var/empty") tried to chroot into Linux
-          # /var/empty (didn't exist), and even when pre-created the
-          # prefix's path translator could no longer reach inside the
-          # chroot. Apply vchroot_expand the same way sys_chdir does.
-          (cd src/external/xnu && git apply --check "$GITHUB_WORKSPACE/ci/patches/0003-darling-xnu-chroot-vchroot-expand.patch") \
-            || { echo "::error::darling-xnu chroot vchroot_expand patch no longer applies"; exit 1; }
-          (cd src/external/xnu && git apply "$GITHUB_WORKSPACE/ci/patches/0003-darling-xnu-chroot-vchroot-expand.patch")
+          # Apple's sshd does chroot("/var/empty") + chdir("/") in its
+          # privsep child. Darling's sys_chroot doesn't vchroot_expand the
+          # path, so Linux chroots into a subtree the prefix's path
+          # translator can no longer reach, and chdir("/") dies ENOENT.
+          # Disable privsep chroot in this build; fork+pipe privsep stays.
+          (cd src/external/openssh && git apply --check "$GITHUB_WORKSPACE/ci/patches/0003-darling-openssh-disable-privsep-chroot.patch") \
+            || { echo "::error::openssh privsep-chroot patch no longer applies"; exit 1; }
+          (cd src/external/openssh && git apply "$GITHUB_WORKSPACE/ci/patches/0003-darling-openssh-disable-privsep-chroot.patch")
 
           # Darling's devname_r only scans /dev top-level, so it misses
           # pty slaves at /dev/pts/N (Linux's devpts mount is a
