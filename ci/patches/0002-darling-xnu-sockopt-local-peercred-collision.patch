@@ -1,38 +1,77 @@
-diff --git a/darling/src/libsystem_kernel/emulation/src/conversion/network/getsockopt.c b/darling/src/libsystem_kernel/emulation/src/conversion/network/getsockopt.c
-index 36b559b..2041ec3 100644
---- a/darling/src/libsystem_kernel/emulation/src/conversion/network/getsockopt.c
-+++ b/darling/src/libsystem_kernel/emulation/src/conversion/network/getsockopt.c
-@@ -9,15 +9,24 @@ extern void* memset(void*, int, __SIZE_TYPE__);
+diff --git a/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/network/getsockopt.c b/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/network/getsockopt.c
+index 941c0e6..a7e0996 100644
+--- a/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/network/getsockopt.c
++++ b/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/network/getsockopt.c
+@@ -9,15 +9,69 @@
+ #include <darling/emulation/xnu_syscall/bsd/helper/network/duct.h>
+ #include <darling/emulation/xnu_syscall/bsd/impl/time/gettimeofday.h>
  
- int sockopt_bsd_to_linux(int* level, int* optname, void** optval, void* optbuf)
++// Linux ABI constants used to disambiguate the LOCAL_PEERCRED/IP_OPTIONS
++// (level=0, optname=1) collision via the actual socket family.
++#define LINUX_SOL_SOCKET_LOCAL  1
++#define LINUX_SO_DOMAIN         39
++#define LINUX_AF_UNIX           1
++#define LINUX_IPPROTO_IP_LOCAL  0
++#define LINUX_IP_OPTIONS_LOCAL  4
++
+ long sys_getsockopt(int fd, int level, int optname, void* optval, int* optlen)
  {
--	/* TCP_NODELAY and LOCAL_PEERCRED both have values of 1 */
--	if (*optname == LOCAL_PEERCRED && *level == XNU_IPPROTO_IP)
--	{
--		struct xucred* c = (struct xucred*) optbuf;
--		// Simulate euid 0
--		memset(c, 0, sizeof(*c));
--		*optname = 0;
--		return 0;
--	}
-+	/*
-+	 * Previously: a stub here recognised LOCAL_PEERCRED (level=SOL_LOCAL=0,
-+	 * optname=1) and faked a euid-0 xucred. Problem: on Apple, IP_OPTIONS
-+	 * (level=IPPROTO_IP=0, optname=1) has the *same* (level, optname) pair,
-+	 * and the translator doesn't have the socket address family to tell
-+	 * them apart. The stub was therefore swallowing every IP_OPTIONS query
-+	 * and leaving the caller's optlen unmodified at its initial value.
-+	 *
-+	 * sshd's check_ip_options() relies on getsockopt(IPPROTO_IP, IP_OPTIONS)
-+	 * to update optlen to 0 for sockets without IP options; with the stub,
-+	 * optlen stayed at sizeof(buf)=200, which sshd interpreted as a source
-+	 * routing attack and fatal()'d every connection.
-+	 *
-+	 * Removing the stub: AF_LOCAL callers that genuinely want LOCAL_PEERCRED
-+	 * will now hit Linux's getsockopt(IPPROTO_IP, IP_OPTIONS) on a unix
-+	 * socket and get EOPNOTSUPP, which is the right early-return signal for
-+	 * code that handles "this OS doesn't support LOCAL_PEERCRED."
-+	 */
- 	if (*level == BSD_SOL_SOCKET)
- 	{
- 		*level = LINUX_SOL_SOCKET;
+ 	int ret, linux_level, linux_optname;
+-	
++
++	// On Apple, LOCAL_PEERCRED (SOL_LOCAL=0, opt=1) and IP_OPTIONS
++	// (IPPROTO_IP=0, opt=1) have the same (level, optname) pair. The
++	// translator has a stub for LOCAL_PEERCRED that fakes a euid-0
++	// xucred and skips the syscall, which is what shellspawn/launchd
++	// expect on AF_UNIX sockets — but it also swallows IP_OPTIONS
++	// queries on AF_INET, breaking sshd (which interprets the unset
++	// optlen as IP options present and fatals).
++	//
++	// Bypass the stub for AF_INET by checking the socket's actual
++	// domain via Linux's SO_DOMAIN and going straight to the kernel's
++	// IP_OPTIONS path. AF_UNIX falls through to the translator stub.
++	if (level == 0 && optname == 1 && optval != NULL && optlen != NULL) {
++		int domain = 0;
++		int domain_len = sizeof(domain);
++		long dret;
++
++#ifdef __NR_socketcall
++		dret = LINUX_SYSCALL(__NR_socketcall, LINUX_SYS_GETSOCKOPT,
++			((long[6]) { fd, LINUX_SOL_SOCKET_LOCAL, LINUX_SO_DOMAIN,
++				&domain, &domain_len, 0 }));
++#else
++		dret = LINUX_SYSCALL(__NR_getsockopt, fd,
++			LINUX_SOL_SOCKET_LOCAL, LINUX_SO_DOMAIN,
++			&domain, &domain_len);
++#endif
++
++		if (dret == 0 && domain != LINUX_AF_UNIX) {
++			// Real IP socket: call Linux's IP_OPTIONS directly,
++			// bypassing the LOCAL_PEERCRED stub in the translator.
++#ifdef __NR_socketcall
++			ret = LINUX_SYSCALL(__NR_socketcall, LINUX_SYS_GETSOCKOPT,
++				((long[6]) { fd, LINUX_IPPROTO_IP_LOCAL,
++					LINUX_IP_OPTIONS_LOCAL, optval, optlen, 0 }));
++#else
++			ret = LINUX_SYSCALL(__NR_getsockopt, fd,
++				LINUX_IPPROTO_IP_LOCAL, LINUX_IP_OPTIONS_LOCAL,
++				optval, optlen);
++#endif
++			if (ret < 0)
++				ret = errno_linux_to_bsd(ret);
++			return ret;
++		}
++		// dret != 0 (SO_DOMAIN failed) or domain == AF_UNIX:
++		// fall through, let the translator handle as LOCAL_PEERCRED.
++	}
++
+ 	linux_level = level;
+ 	linux_optname = optname;
+-	
++
+ 	ret = sockopt_bsd_to_linux(&linux_level, &linux_optname, NULL, optval);
+-	
++
+ 	if (ret != 0 || !linux_optname)
+ 		return ret;
+ 
