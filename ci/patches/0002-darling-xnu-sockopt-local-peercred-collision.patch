@@ -1,0 +1,38 @@
+diff --git a/darling/src/libsystem_kernel/emulation/src/conversion/network/getsockopt.c b/darling/src/libsystem_kernel/emulation/src/conversion/network/getsockopt.c
+index 36b559b..2041ec3 100644
+--- a/darling/src/libsystem_kernel/emulation/src/conversion/network/getsockopt.c
++++ b/darling/src/libsystem_kernel/emulation/src/conversion/network/getsockopt.c
+@@ -9,15 +9,24 @@ extern void* memset(void*, int, __SIZE_TYPE__);
+ 
+ int sockopt_bsd_to_linux(int* level, int* optname, void** optval, void* optbuf)
+ {
+-	/* TCP_NODELAY and LOCAL_PEERCRED both have values of 1 */
+-	if (*optname == LOCAL_PEERCRED && *level == XNU_IPPROTO_IP)
+-	{
+-		struct xucred* c = (struct xucred*) optbuf;
+-		// Simulate euid 0
+-		memset(c, 0, sizeof(*c));
+-		*optname = 0;
+-		return 0;
+-	}
++	/*
++	 * Previously: a stub here recognised LOCAL_PEERCRED (level=SOL_LOCAL=0,
++	 * optname=1) and faked a euid-0 xucred. Problem: on Apple, IP_OPTIONS
++	 * (level=IPPROTO_IP=0, optname=1) has the *same* (level, optname) pair,
++	 * and the translator doesn't have the socket address family to tell
++	 * them apart. The stub was therefore swallowing every IP_OPTIONS query
++	 * and leaving the caller's optlen unmodified at its initial value.
++	 *
++	 * sshd's check_ip_options() relies on getsockopt(IPPROTO_IP, IP_OPTIONS)
++	 * to update optlen to 0 for sockets without IP options; with the stub,
++	 * optlen stayed at sizeof(buf)=200, which sshd interpreted as a source
++	 * routing attack and fatal()'d every connection.
++	 *
++	 * Removing the stub: AF_LOCAL callers that genuinely want LOCAL_PEERCRED
++	 * will now hit Linux's getsockopt(IPPROTO_IP, IP_OPTIONS) on a unix
++	 * socket and get EOPNOTSUPP, which is the right early-return signal for
++	 * code that handles "this OS doesn't support LOCAL_PEERCRED."
++	 */
+ 	if (*level == BSD_SOL_SOCKET)
+ 	{
+ 		*level = LINUX_SOL_SOCKET;
