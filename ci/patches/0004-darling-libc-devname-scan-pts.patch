@@ -1,0 +1,87 @@
+diff --git a/gen/devname.c b/gen/devname.c
+index 7774a82..1df16bb 100644
+--- a/gen/devname.c
++++ b/gen/devname.c
+@@ -67,36 +67,68 @@
+ #include <string.h>
+ #include <stdlib.h>
+ 
+-char *
+-devname_r(dev_t dev, mode_t type, char *buf, int len)
++/*
++ * Darling: also scan /dev/pts for pty slaves. Linux's devpts mount
++ * is exposed as a subdirectory of /dev, so the top-level scan below
++ * never matches a pty slave's st_rdev — which made ttyname() return
++ * NULL for any openpty() result, breaking Apple's sshd PTY allocation
++ * with "openpty returns device for which ttyname fails."
++ *
++ * Format the result as "pts/N" so the caller's "/dev/" prefix
++ * concatenation produces a valid absolute path.
++ */
++static char *
++devname_scan_dir(const char *dir, dev_t dev, mode_t type, char *buf, int len,
++                 const char *prefix)
+ {
+-	register DIR *dp;
+-	register struct dirent *dirp;
++	DIR *dp;
++	struct dirent *dirp;
+ 	struct stat sb;
+ 	char _buf[sizeof(_PATH_DEV) + MAXNAMLEN];
++	size_t dirlen = strlen(dir);
+ 
+-	strcpy(_buf, _PATH_DEV);
++	if (dirlen + 1 >= sizeof(_buf))
++		return NULL;
++	memcpy(_buf, dir, dirlen);
++	_buf[dirlen] = '/';
+ 
+-	if ((dp = opendir(_PATH_DEV)) == NULL) 
+-		return (NULL);
++	if ((dp = opendir(dir)) == NULL)
++		return NULL;
+ 
+-	while ( (dirp = readdir(dp)) ) {
+-		bcopy(dirp->d_name, _buf + sizeof(_PATH_DEV) - 1,
+-		    dirp->d_namlen + 1);
++	while ((dirp = readdir(dp))) {
++		if (dirlen + 1 + dirp->d_namlen + 1 > sizeof(_buf))
++			continue;
++		bcopy(dirp->d_name, _buf + dirlen + 1, dirp->d_namlen + 1);
+ 		if (lstat(_buf, &sb))
+ 			continue;
+ 		if (dev != sb.st_rdev)
+ 			continue;
+ 		if (type != (sb.st_mode & S_IFMT))
+ 			continue;
+-		if (dirp->d_namlen + 1 > len)
++		size_t prefix_len = prefix ? strlen(prefix) : 0;
++		if (prefix_len + dirp->d_namlen + 1 > (size_t)len)
+ 			break;
+-		strcpy(buf, dirp->d_name);
++		if (prefix_len) {
++			memcpy(buf, prefix, prefix_len);
++			strcpy(buf + prefix_len, dirp->d_name);
++		} else {
++			strcpy(buf, dirp->d_name);
++		}
+ 		(void)closedir(dp);
+-		return (buf);
++		return buf;
+ 	}
+ 	(void)closedir(dp);
+-	return (NULL);
++	return NULL;
++}
++
++char *
++devname_r(dev_t dev, mode_t type, char *buf, int len)
++{
++	char *result = devname_scan_dir(_PATH_DEV, dev, type, buf, len, NULL);
++	if (result)
++		return result;
++	/* Darling: pty slaves live at /dev/pts/N, not /dev/N. */
++	return devname_scan_dir(_PATH_DEV "pts", dev, type, buf, len, "pts/");
+ }
+ 
+ char *

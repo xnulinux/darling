@@ -146,6 +146,16 @@ jobs:
             || { echo "::error::openssh privsep-chroot patch no longer applies"; exit 1; }
           (cd src/external/openssh && git apply "$GITHUB_WORKSPACE/ci/patches/0003-darling-openssh-disable-privsep-chroot.patch")
 
+          # Darling's devname_r only scans /dev top-level, so it misses
+          # pty slaves at /dev/pts/N (Linux's devpts mount is a
+          # subdirectory). ttyname() then returns NULL for openpty()
+          # results, and Apple's sshd refuses interactive sessions with
+          # "openpty returns device for which ttyname fails". Make
+          # devname_r also scan /dev/pts.
+          (cd src/external/libc && git apply --check "$GITHUB_WORKSPACE/ci/patches/0004-darling-libc-devname-scan-pts.patch") \
+            || { echo "::error::libc devname-scan-pts patch no longer applies"; exit 1; }
+          (cd src/external/libc && git apply "$GITHUB_WORKSPACE/ci/patches/0004-darling-libc-devname-scan-pts.patch")
+
       - name: Setup ccache
         uses: hendrikmuhs/ccache-action@v1.2
         with:
